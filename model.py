@@ -80,24 +80,42 @@ def get_ai_insights(summary):
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
         prompt = f"""
-You are a statistical expert helping a data analyst.
+You are a senior data scientist.
 
-Here are the results:
+Analyze the statistical inference results below:
+
 {summary}
 
-Explain in simple terms:
-1. What the results mean
-2. Which method is more reliable (CLT vs Bootstrap)
-3. Why
-4. What the user should do next
+Respond in this structured format:
 
-Keep it concise and practical.
+### 1. Key Insight
+- What does the result say about the population?
+
+### 2. Method Comparison
+- Compare CLT vs Bootstrap results
+- Are they similar or different?
+
+### 3. Which Method to Trust?
+- Clearly recommend ONE method
+- Justify using:
+  - sample size
+  - skewness
+  - CI width
+
+### 4. Practical Interpretation
+- Explain in real-world terms (include unit if provided)
+
+### 5. Recommendations
+- What should the user do next?
+  (e.g., increase sample size, trust bootstrap, etc.)
+
+Keep it concise, clear, and practical.
 """
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
+            temperature=0.2
         )
 
         return response.choices[0].message.content
