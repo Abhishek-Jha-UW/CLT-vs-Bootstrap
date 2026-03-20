@@ -3,7 +3,6 @@ from scipy import stats
 from openai import OpenAI
 import streamlit as st
 
-
 # -----------------------------
 # Diagnostics
 # -----------------------------
@@ -17,52 +16,44 @@ def get_diagnostics(data):
         "kurtosis": float(stats.kurtosis(data))
     }
 
-
 # -----------------------------
-# CLT Confidence Interval
+# CLT Confidence Interval (Mean Only)
 # -----------------------------
 def clt_ci(data, confidence=0.95):
+    # This formula ONLY applies to the Mean (Central Limit Theorem)
     mean = np.mean(data)
     se = stats.sem(data)
-
-    z = stats.norm.ppf((1 + confidence) / 2)
-    margin = z * se
-
+    # Using t-distribution for better accuracy with smaller n
+    t_crit = stats.t.ppf((1 + confidence) / 2, df=len(data)-1)
+    margin = t_crit * se
     return (float(mean - margin), float(mean + margin))
 
-
 # -----------------------------
-# Bootstrap Confidence Interval
+# Bootstrap Confidence Interval (Universal)
 # -----------------------------
 def bootstrap_ci(data, stat_func=np.mean, confidence=0.95, n_bootstrap=5000):
     boot_samples = []
-
-    for _ in range(n_bootstrap):
-        sample = np.random.choice(data, size=len(data), replace=True)
-        boot_samples.append(stat_func(sample))
+    # Vectorized for speed
+    resamples = np.random.choice(data, size=(n_bootstrap, len(data)), replace=True)
+    boot_samples = stat_func(resamples, axis=1)
 
     lower = np.percentile(boot_samples, (1 - confidence) / 2 * 100)
     upper = np.percentile(boot_samples, (1 + confidence) / 2 * 100)
 
     return (float(lower), float(upper)), boot_samples
 
-
 # -----------------------------
 # Decision Logic
 # -----------------------------
-def compare_methods(data):
+def compare_methods(data, target_stat="Mean"):
+    if target_stat != "Mean":
+        return "Bootstrap is required (Theoretical CFF is unreliable for this statistic)."
+    
     diag = get_diagnostics(data)
-
     score_clt = 0
-
-    if diag["n"] >= 30:
-        score_clt += 1
-
-    if abs(diag["skewness"]) < 0.5:
-        score_clt += 1
-
-    if diag["std"] < diag["mean"]:
-        score_clt += 1
+    if diag["n"] >= 30: score_clt += 1
+    if abs(diag["skewness"]) < 0.5: score_clt += 1
+    if diag["std"] < abs(diag["mean"]): score_clt += 1
 
     if score_clt >= 2:
         return "CLT is reliable"
@@ -71,54 +62,26 @@ def compare_methods(data):
     else:
         return "Bootstrap is strongly recommended"
 
-
 # -----------------------------
 # AI Insights
 # -----------------------------
 def get_ai_insights(summary):
     try:
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-        prompt = f"""
-You are a senior data scientist.
-
-Analyze the statistical inference results below:
-
-{summary}
-
-Respond in this structured format:
-
-### 1. Key Insight
-- What does the result say about the population?
-
-### 2. Method Comparison
-- Compare CLT vs Bootstrap results
-- Are they similar or different?
-
-### 3. Which Method to Trust?
-- Clearly recommend ONE method
-- Justify using:
-  - sample size
-  - skewness
-  - CI width
-
-### 4. Practical Interpretation
-- Explain in real-world terms (include unit if provided)
-
-### 5. Recommendations
-- What should the user do next?
-  (e.g., increase sample size, trust bootstrap, etc.)
-
-Keep it concise, clear, and practical.
-"""
+        # Check if key exists to avoid crash
+        api_key = st.secrets.get("OPENAI_API_KEY")
+        if not api_key:
+            return "Please set your OpenAI API Key in Streamlit Secrets."
+            
+        client = OpenAI(api_key=api_key)
+        prompt = f"""You are a senior data scientist. Analyze these results: {summary}
+        Respond in structure: 1. Key Insight, 2. Method Comparison, 3. Recommendation, 4. Practical interpretation ({summary.get('unit', 'units')}).
+        Be precise about why the selected statistic matters."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2
         )
-
         return response.choices[0].message.content
-
     except Exception as e:
-        return f"Error generating insights: {e}"
+        return f"Error: {e}"
