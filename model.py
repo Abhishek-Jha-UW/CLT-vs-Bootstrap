@@ -20,10 +20,9 @@ def get_diagnostics(data):
 # CLT Confidence Interval (Mean Only)
 # -----------------------------
 def clt_ci(data, confidence=0.95):
-    # This formula ONLY applies to the Mean (Central Limit Theorem)
     mean = np.mean(data)
     se = stats.sem(data)
-    # Using t-distribution for better accuracy with smaller n
+    # Using t-distribution (more robust than Z-score for n < 100)
     t_crit = stats.t.ppf((1 + confidence) / 2, df=len(data)-1)
     margin = t_crit * se
     return (float(mean - margin), float(mean + margin))
@@ -32,8 +31,7 @@ def clt_ci(data, confidence=0.95):
 # Bootstrap Confidence Interval (Universal)
 # -----------------------------
 def bootstrap_ci(data, stat_func=np.mean, confidence=0.95, n_bootstrap=5000):
-    boot_samples = []
-    # Vectorized for speed
+    # Vectorized for significant speed improvement
     resamples = np.random.choice(data, size=(n_bootstrap, len(data)), replace=True)
     boot_samples = stat_func(resamples, axis=1)
 
@@ -43,39 +41,72 @@ def bootstrap_ci(data, stat_func=np.mean, confidence=0.95, n_bootstrap=5000):
     return (float(lower), float(upper)), boot_samples
 
 # -----------------------------
-# Decision Logic
+# Improved Decision Logic
 # -----------------------------
 def compare_methods(data, target_stat="Mean"):
     if target_stat != "Mean":
-        return "Bootstrap is required (Theoretical CFF is unreliable for this statistic)."
+        return "Bootstrap is required (Theoretical CFF is unreliable/complex for non-mean statistics)."
     
     diag = get_diagnostics(data)
     score_clt = 0
-    if diag["n"] >= 30: score_clt += 1
-    if abs(diag["skewness"]) < 0.5: score_clt += 1
-    if diag["std"] < abs(diag["mean"]): score_clt += 1
+    
+    # 1. Sample Size Check
+    if diag["n"] >= 30: 
+        score_clt += 1
+    # 2. Symmetry Check
+    if abs(diag["skewness"]) < 0.5: 
+        score_clt += 1
+    # 3. Tail Heaviness Check (Kurtosis < 1 suggests lighter tails)
+    if diag["kurtosis"] < 1: 
+        score_clt += 1
 
     if score_clt >= 2:
-        return "CLT is reliable"
+        return "✅ CLT is reliable: Assumptions of normality are likely met."
     elif score_clt == 1:
-        return "CLT is acceptable, but Bootstrap preferred"
+        return "⚠️ CLT is acceptable, but Bootstrap is preferred for better empirical coverage."
     else:
-        return "Bootstrap is strongly recommended"
+        return "🚨 Bootstrap is strongly recommended: Data distribution violates CLT assumptions."
 
 # -----------------------------
-# AI Insights
+# Structured AI Insights
 # -----------------------------
 def get_ai_insights(summary):
     try:
-        # Check if key exists to avoid crash
         api_key = st.secrets.get("OPENAI_API_KEY")
         if not api_key:
             return "Please set your OpenAI API Key in Streamlit Secrets."
             
         client = OpenAI(api_key=api_key)
-        prompt = f"""You are a senior data scientist. Analyze these results: {summary}
-        Respond in structure: 1. Key Insight, 2. Method Comparison, 3. Recommendation, 4. Practical interpretation ({summary.get('unit', 'units')}).
-        Be precise about why the selected statistic matters."""
+        
+        prompt = f"""
+You are a senior data scientist.
+
+Analyze the statistical inference results below:
+
+{summary}
+
+Respond in this structured format:
+
+### 1. Key Insight
+What does the estimated statistic suggest about the population?
+
+### 2. Method Comparison
+Compare CLT vs Bootstrap results (if both exist). Are they similar or different?
+
+### 3. Which Method to Trust?
+Recommend one method and justify using:
+- sample size
+- skewness
+- CI width
+
+### 4. Practical Interpretation
+Explain in simple real-world terms using unit: {summary.get('unit', 'units')}
+
+### 5. Recommendation
+What should the user do next? (e.g., increase sample size, investigate outliers, etc.)
+
+Keep it concise, clear, and practical.
+"""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -84,4 +115,4 @@ def get_ai_insights(summary):
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error generating insights: {e}"
