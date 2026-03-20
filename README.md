@@ -1,11 +1,11 @@
-# Inference Arena: CLT vs Bootstrap
+## Inference Arena: CLT vs Bootstrap
 
-**Inference Arena** is an interactive statistical inference tool that compares **Classical (CLT-based)** and **Bootstrap (empirical)** approaches for estimating population parameters.
+Interactive statistical inference tool that compares **Classical (CLT-based)** and **Bootstrap (empirical)** approaches for estimating population parameters.
+This app help users understand *when theory works—and when data-driven methods are more reliable*
 
-This app helps users understand *when theory works—and when data-driven methods are more reliable*.
 ---
 
-##  What This Tool Does
+###  What This Tool Does
 
 Upload your dataset and:
 
@@ -36,7 +36,7 @@ Upload your dataset and:
   - Practical recommendations
 ---
 
-## Why This Matters
+### Why This Matters
 
 In real-world analytics:
 
