@@ -192,28 +192,66 @@ if st.session_state.df is not None:
             st.write(f"Bootstrap interval is {abs(width_diff):.1f}% {'wider' if width_diff > 0 else 'narrower'} than CLT.")
 
     with v_col2:
-        st.write("### 🧠 AI Referee Insights")
-        if st.button("Generate AI Interpretation"):
-            # Construct comprehensive summary for LLM reasoning
-            summary = {
-                "n": int(diag["n"]),
-                "mean": float(diag["mean"]),
-                "median": float(diag["median"]),
-                "skewness": float(diag["skewness"]),
-                "kurtosis": float(diag["kurtosis"]),
-                "stat_targeted": stat_label,
-                "unit": unit,
-                "confidence_level": ci_label,
-                "bootstrap_ci": boot_res,
-                "bootstrap_width": float(boot_width)
+        # Custom CSS to make the button and container pop
+        st.markdown("""
+            <style>
+            /* Style the button itself */
+            div.stButton > button:first-child {
+                background-color: #72B7B2; /* CLT Teal */
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 0.6rem 1.2rem;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+                box-shadow: 0 4px 14px 0 rgba(114, 183, 178, 0.39);
+                transition: all 0.2s ease-in;
             }
-            if stat_label == "Mean":
-                summary["clt_ci"] = clt_res
-                summary["clt_width"] = float(clt_width)
+            /* Hover effect - change to Bootstrap Orange */
+            div.stButton > button:first-child:hover {
+                background-color: #F58518; /* Bootstrap Orange */
+                box-shadow: 0 6px 20px rgba(245, 133, 24, 0.23);
+                transform: translateY(-2px);
+                color: white;
+            }
+            /* Active/Click effect */
+            div.stButton > button:first-child:active {
+                transform: translateY(1px);
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        st.write("### 🧠 AI Referee Insights")
+        
+        # Using a bordered container to create a 'card' feel
+        with st.container(border=True):
+            st.markdown("✨ **Get the Statistical Verdict**")
+            st.caption("Our LLM analyzes the distributions, skewness, and interval widths to explain the results in plain English.")
+            
+            if st.button("🚀 GENERATE AI INTERPRETATION", use_container_width=True):
+                # Construct comprehensive summary for LLM reasoning
+                summary = {
+                    "n": int(diag["n"]),
+                    "mean": float(diag["mean"]),
+                    "median": float(diag["median"]),
+                    "skewness": float(diag["skewness"]),
+                    "kurtosis": float(diag["kurtosis"]),
+                    "stat_targeted": stat_label,
+                    "unit": unit,
+                    "confidence_level": ci_label,
+                    "bootstrap_ci": boot_res,
+                    "bootstrap_width": float(boot_width)
+                }
                 
-            with st.spinner("AI Referee is analyzing the battle..."):
-                insights = get_ai_insights(summary)
-                st.markdown(insights)
+                if stat_label == "Mean":
+                    summary["clt_ci"] = clt_res
+                    summary["clt_width"] = float(clt_width)
+                    
+                with st.spinner("🤖 AI Referee is entering the arena..."):
+                    insights = get_ai_insights(summary)
+                    st.divider()
+                    st.markdown(insights)
 
 else:
+    # This remains the same as your original fallback
     st.info("Please upload a CSV file or use sample data to begin the inference battle.")
