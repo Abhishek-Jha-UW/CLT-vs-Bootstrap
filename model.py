@@ -1,6 +1,7 @@
 import numpy as np
-import pandas as pd
 from scipy import stats
+from openai import OpenAI
+import streamlit as st
 
 
 # -----------------------------
@@ -9,11 +10,11 @@ from scipy import stats
 def get_diagnostics(data):
     return {
         "n": len(data),
-        "mean": np.mean(data),
-        "median": np.median(data),
-        "std": np.std(data, ddof=1),
-        "skewness": stats.skew(data),
-        "kurtosis": stats.kurtosis(data)
+        "mean": float(np.mean(data)),
+        "median": float(np.median(data)),
+        "std": float(np.std(data, ddof=1)),
+        "skewness": float(stats.skew(data)),
+        "kurtosis": float(stats.kurtosis(data))
     }
 
 
@@ -21,18 +22,17 @@ def get_diagnostics(data):
 # CLT Confidence Interval
 # -----------------------------
 def clt_ci(data, confidence=0.95):
-    n = len(data)
     mean = np.mean(data)
     se = stats.sem(data)
 
     z = stats.norm.ppf((1 + confidence) / 2)
     margin = z * se
 
-    return (mean - margin, mean + margin)
+    return (float(mean - margin), float(mean + margin))
 
 
 # -----------------------------
-# Bootstrap
+# Bootstrap Confidence Interval
 # -----------------------------
 def bootstrap_ci(data, stat_func=np.mean, confidence=0.95, n_bootstrap=5000):
     boot_samples = []
@@ -44,32 +44,63 @@ def bootstrap_ci(data, stat_func=np.mean, confidence=0.95, n_bootstrap=5000):
     lower = np.percentile(boot_samples, (1 - confidence) / 2 * 100)
     upper = np.percentile(boot_samples, (1 + confidence) / 2 * 100)
 
-    return (lower, upper), boot_samples
+    return (float(lower), float(upper)), boot_samples
 
 
 # -----------------------------
 # Decision Logic
 # -----------------------------
 def compare_methods(data):
-    diagnostics = get_diagnostics(data)
+    diag = get_diagnostics(data)
 
     score_clt = 0
-    score_boot = 2  # bootstrap baseline
 
-    if diagnostics["n"] >= 30:
+    if diag["n"] >= 30:
         score_clt += 1
 
-    if abs(diagnostics["skewness"]) < 0.5:
+    if abs(diag["skewness"]) < 0.5:
         score_clt += 1
 
-    if diagnostics["std"] < np.mean(data):
+    if diag["std"] < diag["mean"]:
         score_clt += 1
 
     if score_clt >= 2:
-        verdict = "CLT is reliable"
+        return "CLT is reliable"
     elif score_clt == 1:
-        verdict = "CLT is acceptable, but Bootstrap preferred"
+        return "CLT is acceptable, but Bootstrap preferred"
     else:
-        verdict = "Bootstrap is strongly recommended"
+        return "Bootstrap is strongly recommended"
 
-    return verdict
+
+# -----------------------------
+# AI Insights
+# -----------------------------
+def get_ai_insights(summary):
+    try:
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+        prompt = f"""
+You are a statistical expert helping a data analyst.
+
+Here are the results:
+{summary}
+
+Explain in simple terms:
+1. What the results mean
+2. Which method is more reliable (CLT vs Bootstrap)
+3. Why
+4. What the user should do next
+
+Keep it concise and practical.
+"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        return f"Error generating insights: {e}"
