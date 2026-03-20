@@ -12,155 +12,119 @@ from model import (
 )
 
 # -----------------------------
-# Configuration & Theme
+# Setup & Visual Identity
 # -----------------------------
 st.set_page_config(page_title="Inference Arena", layout="wide")
 
-COLOR_DATA = "#4C78A8"       
-COLOR_CLT = "#72B7B2"        
-COLOR_BOOTSTRAP = "#F58518"  
+COLOR_DATA = "#4C78A8"       # Blue
+COLOR_CLT = "#72B7B2"        # Teal
+COLOR_BOOTSTRAP = "#F58518"  # Orange
 
 st.title("⚔️ Inference Arena: CLT vs Bootstrap")
-st.caption("Compare Classical vs Empirical Inference with AI-powered insights")
+st.caption("Universal Statistical Showdown")
 
 # -----------------------------
-# Sidebar & Template
+# Sidebar Configuration
 # -----------------------------
 with st.sidebar:
-    st.header("Project Settings")
+    st.header("⚙️ Settings")
     
-    def get_template_csv():
-        # Added a slightly skewed default to make the battle interesting
-        df = pd.DataFrame({"value": [10, 12, 15, 18, 20, 22, 25, 30, 10, 15, 45, 50]})
-        return df.to_csv(index=False).encode("utf-8")
+    # 1. Statistic Selector
+    stat_label = st.selectbox("What do you want to estimate?", 
+                              ["Mean", "Median", "Std Dev", "75th Percentile"])
+    
+    stat_map = {
+        "Mean": np.mean,
+        "Median": np.median,
+        "Std Dev": np.std,
+        "75th Percentile": lambda x, axis=None: np.percentile(x, 75, axis=axis)
+    }
+    selected_func = stat_map[stat_label]
 
-    st.download_button(
-        "📥 Download Template",
-        data=get_template_csv(),
-        file_name="template.csv",
-        mime="text/csv"
-    )
-    
     st.divider()
-    unit = st.text_input("Enter Unit (e.g., kg, meters)", "units")
+    unit = st.text_input("Unit (e.g., kg, meters)", "units")
     confidence = st.slider("Confidence Level", 0.80, 0.99, 0.95)
     n_bootstrap = st.selectbox("Bootstrap Samples", [1000, 5000, 10000])
-    
     ci_label = f"{int(confidence*100)}% CI"
 
 # -----------------------------
-# Data Ingestion Logic
+# Data Loading
 # -----------------------------
-if "df" not in st.session_state:
-    st.session_state.df = None
+if "df" not in st.session_state: st.session_state.df = None
 
-col_btn1, col_btn2 = st.columns([1, 4])
-with col_btn1:
-    if st.button("🧪 Use Sample Data"):
-        st.session_state.df = pd.DataFrame({
-            "value": np.random.gamma(shape=2, scale=10, size=100)
-        })
-with col_btn2:
-    uploaded_file = st.file_uploader("Or Upload CSV", type=["csv"], label_visibility="collapsed")
-    if uploaded_file:
-        st.session_state.df = pd.read_csv(uploaded_file)
+c1, c2 = st.columns([1, 4])
+with c1:
+    if st.button("🧪 Sample Data"):
+        st.session_state.df = pd.DataFrame({"value": np.random.gamma(2, 10, 100)})
+with c2:
+    up = st.file_uploader("Upload CSV", type=["csv"], label_visibility="collapsed")
+    if up: st.session_state.df = pd.read_csv(up)
 
 # -----------------------------
-# Main Analysis Arena
+# Execution Arena
 # -----------------------------
 if st.session_state.df is not None:
     df = st.session_state.df
-    if "value" not in df.columns:
-        st.error("CSV must contain a column named 'value'")
-        st.stop()
-
-    data = df["value"].dropna().values
+    data = df.iloc[:, 0].dropna().values # Take first column automatically
     diag = get_diagnostics(data)
 
-    # 1. Diagnostics & Logic Alerts
     st.write("## 📊 Data Diagnostics")
-    
+    # Alert Logic
     if abs(diag["skewness"]) > 1:
-        st.warning(f"⚠️ High Skewness ({diag['skewness']:.2f}) detected. Bootstrap is likely more robust.")
+        st.warning(f"⚠️ High Skewness ({diag['skewness']:.2f}). Bootstrap is preferred.")
     elif diag["n"] < 30:
-        st.info(f"ℹ️ Small sample size (n={diag['n']}). CLT assumptions might be weak.")
+        st.info(f"ℹ️ Small Sample (n={diag['n']}). CLT may be unreliable.")
 
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("n", diag["n"])
-    m2.metric("Mean", f"{diag['mean']:.2f}")
-    m3.metric("Median", f"{diag['median']:.2f}")
-    m4.metric("Skewness", f"{diag['skewness']:.2f}")
-    m5.metric("Std Dev", f"{diag['std']:.2f}")
+    m = st.columns(5)
+    m[0].metric("n", diag["n"])
+    m[1].metric("Mean", f"{diag['mean']:.2f}")
+    m[2].metric("Median", f"{diag['median']:.2f}")
+    m[3].metric("Skewness", f"{diag['skewness']:.2f}")
+    m[4].metric("Std Dev", f"{diag['std']:.2f}")
 
-    fig_raw = px.histogram(data, nbins=25, title="Raw Data Distribution", color_discrete_sequence=[COLOR_DATA])
-    fig_raw.update_layout(height=300, margin=dict(l=10, r=10, t=40, b=10))
-    st.plotly_chart(fig_raw, use_container_width=True)
+    # Calculations
+    boot_res, boot_samples = bootstrap_ci(data, selected_func, confidence, n_bootstrap)
+    boot_width = boot_res[1] - boot_res[0]
 
-    # 2. Run Calculations
-    clt_result = clt_ci(data, confidence)
-    boot_result, boot_samples = bootstrap_ci(data, np.mean, confidence, n_bootstrap)
-    
-    clt_width = clt_result[1] - clt_result[0]
-    boot_width = boot_result[1] - boot_result[0]
-
-    # 3. Simulated CLT Distribution
-    clt_samples = np.random.normal(
-        loc=np.mean(data),
-        scale=np.std(data, ddof=1) / np.sqrt(len(data)),
-        size=5000
-    )
-
-    # 4. The Battle Arena
-    st.write(f"## ⚔️ {ci_label} Battle: CLT vs Bootstrap")
+    # Display Arena
+    st.write(f"## ⚔️ {ci_label} Battle for Population {stat_label}")
     col_left, col_right = st.columns(2)
 
     with col_left:
-        st.subheader("CLT (Theoretical)")
-        fig_clt = px.histogram(clt_samples, nbins=25, color_discrete_sequence=[COLOR_CLT])
-        # Add Vertical Lines for CI
-        fig_clt.add_vline(x=clt_result[0], line_dash="dash", line_color="red", annotation_text="Lower")
-        fig_clt.add_vline(x=clt_result[1], line_dash="dash", line_color="red", annotation_text="Upper")
-        fig_clt.update_layout(height=350, margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig_clt, use_container_width=True)
-        st.info(f"**{ci_label} (CLT):** {clt_result[0]:.2f} to {clt_result[1]:.2f} {unit}")
+        st.subheader(f"CLT (Theoretical {stat_label})")
+        if stat_label == "Mean":
+            clt_res = clt_ci(data, confidence)
+            clt_width = clt_res[1] - clt_res[0]
+            
+            # Simulate CLT Sampling Distribution
+            clt_sim = np.random.normal(diag["mean"], diag["std"]/np.sqrt(diag["n"]), 5000)
+            fig_clt = px.histogram(clt_sim, nbins=25, color_discrete_sequence=[COLOR_CLT])
+            fig_clt.add_vline(x=clt_res[0], line_dash="dash", line_color="red")
+            fig_clt.add_vline(x=clt_res[1], line_dash="dash", line_color="red")
+            st.plotly_chart(fig_clt, use_container_width=True)
+            st.info(f"**{ci_label}:** {clt_res[0]:.2f} to {clt_res[1]:.2f} {unit}")
+            st.write(f"**Interval Width:** {clt_width:.4f}")
+        else:
+            st.error(f"❌ CFF formula not supported for '{stat_label}'.")
+            st.write("Theoretical formulas for non-mean statistics require specific population assumptions (e.g. Chi-Square for Std Dev).")
 
     with col_right:
-        st.subheader("Bootstrap (Empirical)")
+        st.subheader(f"Bootstrap (Empirical {stat_label})")
         fig_boot = px.histogram(boot_samples, nbins=25, color_discrete_sequence=[COLOR_BOOTSTRAP])
-        # Add Vertical Lines for CI
-        fig_boot.add_vline(x=boot_result[0], line_dash="dash", line_color="black", annotation_text="Lower")
-        fig_boot.add_vline(x=boot_result[1], line_dash="dash", line_color="black", annotation_text="Upper")
-        fig_boot.update_layout(height=350, margin=dict(l=10, r=10, t=30, b=10))
+        fig_boot.add_vline(x=boot_res[0], line_dash="dash", line_color="black")
+        fig_boot.add_vline(x=boot_res[1], line_dash="dash", line_color="black")
         st.plotly_chart(fig_boot, use_container_width=True)
-        st.success(f"**{ci_label} (Bootstrap):** {boot_result[0]:.2f} to {boot_result[1]:.2f} {unit}")
+        st.success(f"**{ci_label}:** {boot_res[0]:.2f} to {boot_res[1]:.2f} {unit}")
+        st.write(f"**Interval Width:** {boot_width:.4f}")
 
-    # 5. Comparison Metrics
-    st.write("### 📏 Uncertainty (CI Width) Comparison")
-    cw1, cw2 = st.columns(2)
-    cw1.write(f"**CLT Width:** {clt_width:.4f} {unit}")
-    cw2.write(f"**Bootstrap Width:** {boot_width:.4f} {unit}")
-
-    # 6. AI Insights
+    # AI Verdict
     st.divider()
-    st.write("### 🧠 AI Referee Insights")
-    
-    summary = {
-        "sample_size": int(len(data)),
-        "mean": float(np.mean(data)),
-        "median": float(diag["median"]),
-        "clt_ci": clt_result,
-        "bootstrap_ci": boot_result,
-        "clt_width": float(clt_width),
-        "bootstrap_width": float(boot_width),
-        "skewness": float(diag["skewness"]),
-        "unit": unit,
-        "confidence_level": ci_label
-    }
-
-    if st.button("Generate AI Insights"):
-        with st.spinner("Analyzing intervals..."):
-            insights = get_ai_insights(summary)
-            st.markdown(f"> {insights}")
-
-else:
-    st.info("Upload data to begin the inference battle.")
+    v_col1, v_col2 = st.columns([1, 2])
+    with v_col1:
+        st.write("### 🏁 Verdict")
+        st.write(compare_methods(data, stat_label))
+    with v_col2:
+        if st.button("Generate AI Insights"):
+            summary = {**diag, "unit": unit, "stat": stat_label, "boot_ci": boot_res}
+            if stat_label == "Mean": summary["clt_ci"] = clt_res
+            st.markdown(get_ai_insights(summary))
