@@ -25,22 +25,28 @@ def get_ai_insights(
 
     client = OpenAI(api_key=api_key)
     unit = summary.get("unit", "units")
-    prompt = f"""You are a senior statistician talking to a data analyst.
+    prompt = f"""You are a senior statistician writing for a data analyst who may not remember theory details.
 
-Analyze the inference summary below and respond in Markdown with exactly these sections:
+You will receive a Python dictionary called the **summary**. Use **only** facts that appear in the summary. Do not invent sample sizes, intervals, or widths. If a field is missing, say you do not have it.
 
-### 1. What the data suggests
-### 2. CLT vs bootstrap (if both exist)
-### 3. What to trust and why
-### 4. Plain-language interpretation (use unit: {unit})
-### 5. Next steps
+Write Markdown with **exactly** these five sections (same headings):
 
-Rules:
-- Be precise; avoid claiming 'random sample' unless stated.
-- If only bootstrap exists, explain why classical shortcuts may be weak.
-- Keep the entire response under ~250 words.
+### 1. What the sample is telling you
+### 2. How classical and bootstrap compare (only if both intervals exist in the summary)
+### 3. What I would emphasize in a readout
+### 4. Plain-language interpretation (use the unit: {unit})
+### 5. Sensible next steps
 
-Summary (Python dict, values may be missing):
+**Width comparison rule (important):**
+- If `width_difference_pct_vs_classical` is present, you may describe relative width using that percentage (bootstrap vs classical).
+- If `width_difference_absolute` is present, you may mention the absolute difference in the **same units as the estimand** (not as a substitute for the percent unless the summary has no percent field).
+- Never describe width change using a bare number without stating whether it is **percent** or **absolute**.
+
+Style:
+- Short paragraphs, no filler, under ~280 words total.
+- Do not claim the data are a "random sample" unless the summary explicitly says so.
+
+Summary:
 {summary}
 """
 
