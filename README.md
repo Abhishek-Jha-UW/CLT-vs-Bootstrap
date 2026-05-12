@@ -1,50 +1,49 @@
-## Inference Arena: CLT vs Bootstrap
+# Inference Arena (CLT vs bootstrap)
 
-Interactive statistical inference tool that compares **Classical (CLT-based)** and **Bootstrap (empirical)** approaches for estimating population parameters.
-This app help users understand *when theory works—and when data-driven methods are more reliable*
+Interactive Streamlit app for analysts who want a **clean, defensible** comparison between:
 
----
+- **Classical intervals** where standard pivots exist (Student *t* for a mean, Wilson for a binomial proportion)
+- **Percentile bootstrap** for the same estimand (plus bootstrap-first paths for median / SD / percentiles)
 
-###  What This Tool Does
+The first implementation is preserved under `initial_data/` for portfolio traceability.
 
-Upload your dataset and:
+## Run locally
 
-- Estimate statistics:
-  - Mean
-  - Median
-  - Proportion
-  - Percentiles
+```bash
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-- Compare two inference approaches:
-  - **Central Limit Theorem (CLT)**
-  - **Bootstrap Resampling**
+Optional local secrets file (never commit real keys):
 
-- Generate:
-  - Confidence Intervals (default: 95%)
-  - Distribution plots
-  - CI comparisons
+1. Create `.streamlit/secrets.toml`
+2. Add:
 
-- Diagnose your data:
-  - Sample size
-  - Skewness
-  - Outliers
-  - Variability
+```toml
+OPENAI_API_KEY = "sk-..."
+# optional override (defaults to a small/cheap model)
+OPENAI_MODEL = "gpt-4o-mini"
+```
 
-- Get AI-powered insights:
-  - Which method is more reliable?
-  - Why?
-  - Practical recommendations
----
+## Streamlit Community Cloud
 
-### Why This Matters
+In **App settings → Secrets**, add the same keys. **Do not** commit API keys to GitHub.
 
-In real-world analytics:
+Recommended default model: **`gpt-4o-mini`** (low cost, strong enough for short explanations).
 
-- CLT assumptions often break (small samples, skewed data)
-- Bootstrap offers a **data-driven alternative**
+## Tests
 
-This tool helps you:
-- Understand the trade-offs
-- Make better statistical decisions
-- Communicate results clearly
+```bash
+pytest -q
+```
 
+## Project layout
+
+| Path | Purpose |
+|------|---------|
+| `app.py` | Streamlit UI |
+| `inference/` | Pure-Python statistics + optional LLM client wrapper |
+| `initial_data/` | Archived first version (`app.py`, `model.py`, …) |
+| `.streamlit/secrets.toml.example` | Copy/rename pattern for local secrets |
